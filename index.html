@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Text an PC senden</title>
+  <title>Zählerstände erfassen</title>
   <style>
     body {
       font-family: Arial, sans-serif;
@@ -19,14 +19,18 @@
       border-radius: 10px;
       box-shadow: 0 0 10px rgba(0,0,0,0.1);
     }
-    textarea {
+    label {
+      display: block;
+      margin-top: 1rem;
+      font-weight: bold;
+    }
+    input[type="text"] {
       width: 100%;
-      height: 200px;
-      padding: 1rem;
+      padding: 0.75rem;
       font-size: 1rem;
       border-radius: 5px;
       border: 1px solid #ccc;
-      resize: vertical;
+      margin-bottom: 1rem;
     }
     button {
       margin-top: 1rem;
@@ -49,37 +53,42 @@
 </head>
 <body>
   <div class="container">
-    <h2>Text an PC senden</h2>
-    <form id="textForm">
-      <textarea id="textInput" name="text" placeholder="Schreibe hier deinen Text..."></textarea>
+    <h2>Zählerstände</h2>
+    <form id="meterForm">
+      <label for="strom">Stromzähler:</label>
+      <input type="text" id="strom" name="strom">
+
+      <label for="wasser">Wasserzähler:</label>
+      <input type="text" id="wasser" name="wasser">
+
+      <label for="heiz">Heizzähler:</label>
+      <input type="text" id="heiz" name="heiz">
+
       <button type="submit">Senden</button>
     </form>
     <div class="message" id="message"></div>
   </div>
 
   <script>
-    const form = document.getElementById('textForm');
+    const form = document.getElementById('meterForm');
     const message = document.getElementById('message');
 
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
 
-      const text = document.getElementById('textInput').value;
-      const formData = new FormData();
-      formData.append('text', text);
+      const strom = document.getElementById('strom').value;
+      const wasser = document.getElementById('wasser').value;
+      const heiz = document.getElementById('heiz').value;
 
-      try {
-        const response = await fetch('https://funny-monkey-example.trycloudflare.com/submit', {
-          method: 'POST',
-          body: formData
-        });
+      const csvContent = `Stromzähler,Wasserzähler,Heizzähler\n${strom},${wasser},${heiz}`;
 
-        const result = await response.text();
-        message.textContent = result;
-      } catch (error) {
-        message.textContent = 'Fehler beim Senden.';
-        console.error(error);
-      }
+      const blob = new Blob([csvContent], { type: 'text/csv' });
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = 'Zählerstände-Mehrzweckhalle.csv';
+      link.click();
+
+      message.textContent = 'Zählerstände wurden als CSV-Datei gespeichert.';
     });
   </script>
 </body>
