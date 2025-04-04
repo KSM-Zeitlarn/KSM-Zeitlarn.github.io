@@ -1,79 +1,117 @@
-Sub Mehrzweckhalle_CSV_UTF8_Sicher()
-    Dim wsZiel As Worksheet
-    Dim letzteZeileZiel As Long
-    Dim dateipfad As String
-    Dim dateiname As String
-    Dim inhalt As String
-    Dim zeilen() As String
-    Dim zeile As String
-    Dim zeilenArray() As String
-    Dim headerOrt As String, headerRaum As String
-    Dim i As Long
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Zählerstände erfassen (CSV erweitern)</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 2rem;
+      background-color: #f4f4f4;
+      color: #333;
+    }
+    .container {
+      max-width: 600px;
+      margin: auto;
+      background: white;
+      padding: 2rem;
+      border-radius: 10px;
+      box-shadow: 0 0 10px rgba(0,0,0,0.1);
+    }
+    label {
+      display: block;
+      margin-top: 1rem;
+      font-weight: bold;
+    }
+    input[type="text"] {
+      width: 100%;
+      padding: 0.75rem;
+      font-size: 1rem;
+      border-radius: 5px;
+      border: 1px solid #ccc;
+      margin-bottom: 1rem;
+    }
+    button {
+      margin-top: 1rem;
+      padding: 0.75rem 1.5rem;
+      background-color: #007bff;
+      color: white;
+      border: none;
+      border-radius: 5px;
+      font-size: 1rem;
+      cursor: pointer;
+    }
+    button:hover {
+      background-color: #0056b3;
+    }
+    .message {
+      margin-top: 1rem;
+      font-weight: bold;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h2>Zählerstände</h2>
+    <form id="meterForm">
+      <label for="strom">Stromzähler:</label>
+      <input type="text" id="strom" name="strom">
 
-    ' Ziel-Arbeitsblatt
-    Set wsZiel = ThisWorkbook.Sheets("Tabelle2")
+      <label for="wasser">Wasserzähler:</label>
+      <input type="text" id="wasser" name="wasser">
 
-    ' Letzte freie Zeile in Spalte B
-    letzteZeileZiel = wsZiel.Cells(wsZiel.Rows.Count, 2).End(xlUp).Row + 1
-    If wsZiel.Cells(1, 2).Value = "" Then letzteZeileZiel = 1
+      <label for="heiz">Heizzähler:</label>
+      <input type="text" id="heiz" name="heiz">
 
-    ' Dateipfad
-    dateiname = "Zählerstände-Mehrzweckhalle.csv"
-    dateipfad = ThisWorkbook.Path & "\" & dateiname
+      <button type="submit">Senden</button>
+    </form>
+    <div class="message" id="message"></div>
+  </div>
 
-    ' Datei prüfen
-    If Dir(dateipfad) = "" Then
-        MsgBox "CSV-Datei nicht gefunden: " & dateipfad, vbCritical
-        Exit Sub
-    End If
+  <script>
+    const form = document.getElementById('meterForm');
+    const message = document.getElementById('message');
 
-    ' Inhalt mit ADODB.Stream einlesen (UTF-8 BOM-sicher)
-    Dim stream As Object
-    Set stream = CreateObject("ADODB.Stream")
-    stream.Charset = "utf-8"
-    stream.Open
-    stream.LoadFromFile dateipfad
-    inhalt = stream.ReadText
-    stream.Close
-    Set stream = Nothing
+    form.addEventListener('submit', (e) => {
+      e.preventDefault();
 
-    ' Zeilenumbrüche vereinheitlichen
-    inhalt = Replace(inhalt, vbCrLf, vbLf)
-    zeilen = Split(inhalt, vbLf)
+      const strom = document.getElementById('strom').value;
+      const wasser = document.getElementById('wasser').value;
+      const heiz = document.getElementById('heiz').value;
 
-    ' Header aus erster Zeile lesen
-    If UBound(zeilen) >= 0 Then
-        zeilenArray = Split(zeilen(0), ";")
-        If UBound(zeilenArray) >= 1 Then
-            headerOrt = Trim(zeilenArray(0))
-            headerRaum = Trim(zeilenArray(1))
-        Else
-            MsgBox "Ungültige Header-Zeile.", vbCritical
-            Exit Sub
-        End If
-    Else
-        MsgBox "Die CSV-Datei ist leer.", vbCritical
-        Exit Sub
-    End If
+      const header = "Mehrzweckhalle;Schützen-Raum;";
+      const bom = '\uFEFF';
 
-    ' Ab Zeile 1 (zweite Zeile der Datei) beginnen
-    For i = 1 To UBound(zeilen)
-        zeile = Trim(zeilen(i))
-        If zeile <> "" Then
-            zeilenArray = Split(zeile, ";")
-            If UBound(zeilenArray) >= 2 Then
-                If Trim(zeilenArray(2)) <> "" Then
-                    wsZiel.Cells(letzteZeileZiel, 1).Value = Date
-                    wsZiel.Cells(letzteZeileZiel, 2).Value = headerOrt
-                    wsZiel.Cells(letzteZeileZiel, 3).Value = headerRaum
-                    wsZiel.Cells(letzteZeileZiel, 4).Value = Trim(zeilenArray(1))
-                    wsZiel.Cells(letzteZeileZiel, 5).Value = Trim(zeilenArray(2))
-                    wsZiel.Cells(letzteZeileZiel, 6).Value = headerOrt & headerRaum & Trim(zeilenArray(1))
-                    letzteZeileZiel = letzteZeileZiel + 1
-                End If
-            End If
-        End If
-    Next i
+      // Neue CSV-Zeilen
+      const newRows = [
+        ["1", "Stromzähler", strom],
+        ["2", "Wasserzähler", wasser],
+        ["3", "Heizzähler", heiz]
+      ];
 
-    MsgBox "CSV-Daten erfolgreich übertragen!", vbInformation
-End Sub
+      const newCSV = newRows.map(r => r.join(";")).join("\r\n");
+
+      // Prüfe, ob localStorage bereits Einträge enthält
+      let existingCSV = localStorage.getItem("csvData");
+      if (!existingCSV) {
+        existingCSV = header + "\r\n";
+      }
+
+      existingCSV += newCSV + "\r\n";
+
+      // Im localStorage aktualisieren
+      localStorage.setItem("csvData", existingCSV);
+
+      // Jetzt CSV-Datei erzeugen
+      const blob = new Blob(["\uFEFF" + existingCSV], { type: "text/csv;charset=utf-8;" });
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(blob);
+      link.download = "Zählerstände-Mehrzweckhalle.csv";
+      link.click();
+
+      message.textContent = "Zählerstände wurden gespeichert und angehängt.";
+    });
+  </script>
+</body>
+</html>
