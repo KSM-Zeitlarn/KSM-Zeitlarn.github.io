@@ -1,116 +1,96 @@
 <!DOCTYPE html>
 <html lang="de">
 <head>
-  <meta charset="UTF-8">
+  <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Zählerstände erfassen (CSV erweitern)</title>
+  <title>Zählerstände senden</title>
   <style>
     body {
-      font-family: Arial, sans-serif;
-      margin: 2rem;
+      font-family: sans-serif;
       background-color: #f4f4f4;
-      color: #333;
-    }
-    .container {
-      max-width: 600px;
-      margin: auto;
-      background: white;
       padding: 2rem;
-      border-radius: 10px;
-      box-shadow: 0 0 10px rgba(0,0,0,0.1);
+      max-width: 500px;
+      margin: auto;
+    }
+    h2 {
+      text-align: center;
     }
     label {
       display: block;
       margin-top: 1rem;
-      font-weight: bold;
     }
-    input[type="text"] {
+    input, button {
       width: 100%;
       padding: 0.75rem;
       font-size: 1rem;
-      border-radius: 5px;
-      border: 1px solid #ccc;
-      margin-bottom: 1rem;
+      margin-top: 0.5rem;
     }
     button {
-      margin-top: 1rem;
-      padding: 0.75rem 1.5rem;
       background-color: #007bff;
       color: white;
       border: none;
-      border-radius: 5px;
-      font-size: 1rem;
+      margin-top: 1.5rem;
       cursor: pointer;
     }
     button:hover {
       background-color: #0056b3;
     }
-    .message {
-      margin-top: 1rem;
-      font-weight: bold;
-    }
   </style>
 </head>
 <body>
-  <div class="container">
-    <h2>Zählerstände</h2>
-    <form id="meterForm">
-      <label for="strom">Stromzähler:</label>
-      <input type="text" id="strom" name="strom">
+  <h2>Zählerstände - Mehrzweckhalle</h2>
+  <form id="zaehlerForm">
+    <label for="strom">Stromzähler:</label>
+    <input type="number" name="strom" id="strom" required>
 
-      <label for="wasser">Wasserzähler:</label>
-      <input type="text" id="wasser" name="wasser">
+    <label for="wasser">Wasserzähler:</label>
+    <input type="number" name="wasser" id="wasser" required>
 
-      <label for="heiz">Heizzähler:</label>
-      <input type="text" id="heiz" name="heiz">
+    <label for="heiz">Heizzähler:</label>
+    <input type="number" name="heiz" id="heiz" required>
 
-      <button type="submit">Senden</button>
-    </form>
-    <div class="message" id="message"></div>
-  </div>
+    <button type="submit">Senden</button>
+  </form>
 
   <script>
-    const form = document.getElementById('meterForm');
-    const message = document.getElementById('message');
-
-    form.addEventListener('submit', (e) => {
+    document.getElementById("zaehlerForm").addEventListener("submit", function(e) {
       e.preventDefault();
 
-      const strom = document.getElementById('strom').value;
-      const wasser = document.getElementById('wasser').value;
-      const heiz = document.getElementById('heiz').value;
+      const strom = document.getElementById("strom").value;
+      const wasser = document.getElementById("wasser").value;
+      const heiz = document.getElementById("heiz").value;
 
-      const header = "Mehrzweckhalle;Schützen-Raum;";
-      const bom = '\uFEFF';
+      const jetzt = new Date();
+      const tag = String(jetzt.getDate()).padStart(2, '0');
+      const monat = String(jetzt.getMonth() + 1).padStart(2, '0');
+      const jahr = jetzt.getFullYear();
+      const datum = tag + "." + monat + "." + jahr;
 
-      // Neue CSV-Zeilen
-      const newRows = [
-        ["1", "Stromzähler", strom],
-        ["2", "Wasserzähler", wasser],
-        ["3", "Heizzähler", heiz]
+      const eintraege = [
+        { bezeichnung: "Stromzähler", wert: strom },
+        { bezeichnung: "Wasserzähler", wert: wasser },
+        { bezeichnung: "Heizzähler", wert: heiz }
       ];
 
-      const newCSV = newRows.map(r => r.join(";")).join("\r\n");
+      eintraege.forEach(entry => {
+        const form = new FormData();
+        form.append("datum", datum);
+        form.append("ort", "Mehrzweckhalle");
+        form.append("raum", "Schützen-Raum");
+        form.append("bezeichnung", entry.bezeichnung);
+        form.append("wert", entry.wert);
 
-      // Prüfe, ob localStorage bereits Einträge enthält
-      let existingCSV = localStorage.getItem("csvData");
-      if (!existingCSV) {
-        existingCSV = header + "\r\n";
-      }
+        fetch("https://script.google.com/macros/s/AKfycbxxXaexXnT-CYEBr4fFiFmaJ_J8Fnn7P_FXuwxcQIEn8GVeV1csD5vCNTzKX5D2j4rRuQ/exec", {
+          method: "POST",
+          body: form
+        })
+        .then(response => response.text())
+        .then(data => console.log("Erfolgreich gesendet:", data))
+        .catch(error => console.error("Fehler beim Senden:", error));
+      });
 
-      existingCSV += newCSV + "\r\n";
-
-      // Im localStorage aktualisieren
-      localStorage.setItem("csvData", existingCSV);
-
-      // Jetzt CSV-Datei erzeugen
-      const blob = new Blob(["\uFEFF" + existingCSV], { type: "text/csv;charset=utf-8;" });
-      const link = document.createElement("a");
-      link.href = URL.createObjectURL(blob);
-      link.download = "Zählerstände-Mehrzweckhalle.csv";
-      link.click();
-
-      message.textContent = "Zählerstände wurden gespeichert und angehängt.";
+      alert("Zählerstände wurden übermittelt.");
+      document.getElementById("zaehlerForm").reset();
     });
   </script>
 </body>
