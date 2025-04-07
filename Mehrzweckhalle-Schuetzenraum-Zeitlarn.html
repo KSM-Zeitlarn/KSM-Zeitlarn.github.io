@@ -65,45 +65,38 @@
       const status = document.getElementById("statusMessage");
       status.textContent = "Sende Daten...";
 
+      const strom = document.getElementById("strom").value;
+      const wasser = document.getElementById("wasser").value;
+      const heiz = document.getElementById("heiz").value;
+
+      if (strom === "" && wasser === "" && heiz === "") {
+        status.textContent = "❗ Bitte mindestens ein Feld ausfüllen.";
+        return;
+      }
+
+      const jetzt = new Date();
+      const tag = String(jetzt.getDate()).padStart(2, '0');
+      const monat = String(jetzt.getMonth() + 1).padStart(2, '0');
+      const jahr = jetzt.getFullYear();
+      const datum = tag + "." + monat + "." + jahr;
+
+      const form = new FormData();
+      form.append("datum", datum);
+      form.append("ort", "Mehrzweckhalle");
+      form.append("raum", "Schützenraum-Zeitlarn");
+      if (strom !== "") form.append("strom", strom);
+      if (wasser !== "") form.append("wasser", wasser);
+      if (heiz !== "") form.append("heiz", heiz);
+
       try {
-        const strom = document.getElementById("strom").value;
-        const wasser = document.getElementById("wasser").value;
-        const heiz = document.getElementById("heiz").value;
+        const response = await fetch("https://script.google.com/macros/s/AKfycbxxXaexXnT-CYEBr4fFiFmaJ_J8Fnn7P_FXuwxcQIEn8GVeV1csD5vCNTzKX5D2j4rRuQ/exec", {
+          method: "POST",
+          body: form
+        });
 
-        const jetzt = new Date();
-        const tag = String(jetzt.getDate()).padStart(2, '0');
-        const monat = String(jetzt.getMonth() + 1).padStart(2, '0');
-        const jahr = jetzt.getFullYear();
-        const datum = tag + "." + monat + "." + jahr;
-
-        const eintraege = [];
-        if (strom !== "") eintraege.push(["Stromzähler", strom]);
-        if (wasser !== "") eintraege.push(["Wasserzähler", wasser]);
-        if (heiz !== "") eintraege.push(["Heizzähler", heiz]);
-
-        if (eintraege.length === 0) {
-          status.textContent = "❗ Bitte mindestens ein Feld ausfüllen.";
-          return;
-        }
-
-        for (const [bezeichnung, wert] of eintraege) {
-          const form = new FormData();
-          form.append("datum", datum);
-          form.append("ort", "Mehrzweckhalle");
-          form.append("raum", "Schützenraum-Zeitlarn");
-          form.append("bezeichnung", bezeichnung);
-          form.append("wert", wert);
-
-          const response = await fetch("https://script.google.com/macros/s/AKfycbxxXaexXnT-CYEBr4fFiFmaJ_J8Fnn7P_FXuwxcQIEn8GVeV1csD5vCNTzKX5D2j4rRuQ/exec", {
-            method: "POST",
-            body: form
-          });
-
-          const text = await response.text();
-          console.log(`Antwort (${bezeichnung}):`, text);
-        }
-
-        status.textContent = "✅ Erfolgreich gesendet!";
+        const text = await response.text();
+        status.textContent = text.includes("✅") ? "✅ Erfolgreich gesendet!" : "⚠️ Antwort: " + text;
+        console.log("Antwort:", text);
         document.getElementById("zaehlerForm").reset();
       } catch (error) {
         status.textContent = "❌ Fehler beim Senden: " + error;
