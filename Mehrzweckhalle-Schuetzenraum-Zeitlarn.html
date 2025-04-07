@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Zählerstände senden</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      background-color: #f4f4f4;
+      padding: 2rem;
+      max-width: 500px;
+      margin: auto;
+    }
+    h2 {
+      text-align: center;
+    }
+    label {
+      display: block;
+      margin-top: 1rem;
+    }
+    input, button {
+      width: 100%;
+      padding: 0.75rem;
+      font-size: 1rem;
+      margin-top: 0.5rem;
+    }
+    button {
+      background-color: #007bff;
+      color: white;
+      border: none;
+      margin-top: 1.5rem;
+      cursor: pointer;
+    }
+    button:hover {
+      background-color: #0056b3;
+    }
+  </style>
+</head>
+<body>
+  <h2>Zählerstände - Mehrzweckhalle</h2>
+  <form id="zaehlerForm">
+    <label for="strom">Stromzähler:</label>
+    <input type="number" name="strom" id="strom" required>
+
+    <label for="wasser">Wasserzähler:</label>
+    <input type="number" name="wasser" id="wasser" required>
+
+    <label for="heiz">Heizzähler:</label>
+    <input type="number" name="heiz" id="heiz" required>
+
+    <button type="submit">Senden</button>
+  </form>
+
+  <script>
+    document.getElementById("zaehlerForm").addEventListener("submit", function(e) {
+      e.preventDefault();
+
+      const strom = document.getElementById("strom").value;
+      const wasser = document.getElementById("wasser").value;
+      const heiz = document.getElementById("heiz").value;
+
+      const jetzt = new Date();
+      const tag = String(jetzt.getDate()).padStart(2, '0');
+      const monat = String(jetzt.getMonth() + 1).padStart(2, '0');
+      const jahr = jetzt.getFullYear();
+      const datum = tag + "." + monat + "." + jahr;
+
+      const eintraege = [
+        { bezeichnung: "Stromzähler", wert: strom },
+        { bezeichnung: "Wasserzähler", wert: wasser },
+        { bezeichnung: "Heizzähler", wert: heiz }
+      ];
+
+      eintraege.forEach(entry => {
+        const form = new FormData();
+        form.append("datum", datum);
+        form.append("ort", "Mehrzweckhalle");
+        form.append("raum", "Schützenraum-Zeitlarn");
+        form.append("bezeichnung", entry.bezeichnung);
+        form.append("wert", entry.wert);
+
+        fetch("https://script.google.com/macros/s/AKfycbxxXaexXnT-CYEBr4fFiFmaJ_J8Fnn7P_FXuwxcQIEn8GVeV1csD5vCNTzKX5D2j4rRuQ/exec", {
+          method: "POST",
+          body: form
+        })
+        .then(response => response.text())
+        .then(data => console.log("Erfolgreich gesendet:", data))
+        .catch(error => console.error("Fehler beim Senden:", error));
+      });
+
+      alert("Zählerstände wurden übermittelt.");
+      document.getElementById("zaehlerForm").reset();
+    });
+  </script>
+</body>
+</html>
