@@ -35,6 +35,11 @@
     button:hover {
       background-color: #0056b3;
     }
+    .status {
+      margin-top: 1rem;
+      text-align: center;
+      font-weight: bold;
+    }
   </style>
 </head>
 <body>
@@ -50,47 +55,48 @@
     <input type="number" name="heiz" id="heiz" required>
 
     <button type="submit">Senden</button>
+    <div class="status" id="statusMessage"></div>
   </form>
 
   <script>
-    document.getElementById("zaehlerForm").addEventListener("submit", function(e) {
+    document.getElementById("zaehlerForm").addEventListener("submit", async function(e) {
       e.preventDefault();
 
-      const strom = document.getElementById("strom").value;
-      const wasser = document.getElementById("wasser").value;
-      const heiz = document.getElementById("heiz").value;
+      const status = document.getElementById("statusMessage");
+      status.textContent = "Sende Daten...";
 
-      const jetzt = new Date();
-      const tag = String(jetzt.getDate()).padStart(2, '0');
-      const monat = String(jetzt.getMonth() + 1).padStart(2, '0');
-      const jahr = jetzt.getFullYear();
-      const datum = tag + "." + monat + "." + jahr;
+      try {
+        const strom = document.getElementById("strom").value;
+        const wasser = document.getElementById("wasser").value;
+        const heiz = document.getElementById("heiz").value;
 
-      const eintraege = [
-        { bezeichnung: "Stromzähler", wert: strom },
-        { bezeichnung: "Wasserzähler", wert: wasser },
-        { bezeichnung: "Heizzähler", wert: heiz }
-      ];
+        const jetzt = new Date();
+        const tag = String(jetzt.getDate()).padStart(2, '0');
+        const monat = String(jetzt.getMonth() + 1).padStart(2, '0');
+        const jahr = jetzt.getFullYear();
+        const datum = tag + "." + monat + "." + jahr;
 
-      eintraege.forEach(entry => {
         const form = new FormData();
         form.append("datum", datum);
         form.append("ort", "Mehrzweckhalle");
-        form.append("raum", "Schützenraum");
-        form.append("bezeichnung", entry.bezeichnung);
-        form.append("wert", entry.wert);
+        form.append("raum", "Schützen-Raum");
+        form.append("strom", strom);
+        form.append("wasser", wasser);
+        form.append("heiz", heiz);
 
-        fetch("https://script.google.com/macros/s/AKfycbxxXaexXnT-CYEBr4fFiFmaJ_J8Fnn7P_FXuwxcQIEn8GVeV1csD5vCNTzKX5D2j4rRuQ/exec", {
+        const response = await fetch("https://script.google.com/macros/s/AKfycbxxXaexXnT-CYEBr4fFiFmaJ_J8Fnn7P_FXuwxcQIEn8GVeV1csD5vCNTzKX5D2j4rRuQ/exec", {
           method: "POST",
           body: form
-        })
-        .then(response => response.text())
-        .then(data => console.log("Erfolgreich gesendet:", data))
-        .catch(error => console.error("Fehler beim Senden:", error));
-      });
+        });
 
-      alert("Zählerstände wurden übermittelt.");
-      document.getElementById("zaehlerForm").reset();
+        const text = await response.text();
+        status.textContent = "✅ Erfolgreich gesendet!";
+        console.log("Antwort:", text);
+        document.getElementById("zaehlerForm").reset();
+      } catch (error) {
+        status.textContent = "❌ Fehler beim Senden: " + error;
+        console.error("Fehler:", error);
+      }
     });
   </script>
 </body>
