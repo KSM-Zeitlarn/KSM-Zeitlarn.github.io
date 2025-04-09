@@ -15,21 +15,31 @@
     h2 {
       text-align: center;
     }
+    .input-row {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
     label {
       display: block;
       margin-top: 1rem;
     }
-    input, button {
+    input[type="number"] {
+      flex: 1;
+      padding: 0.75rem;
+      font-size: 1rem;
+    }
+    .unit {
+      white-space: nowrap;
+    }
+    button {
       width: 100%;
       padding: 0.75rem;
       font-size: 1rem;
-      margin-top: 0.5rem;
-    }
-    button {
+      margin-top: 1.5rem;
       background-color: #007bff;
       color: white;
       border: none;
-      margin-top: 1.5rem;
       cursor: pointer;
     }
     button:hover {
@@ -46,13 +56,22 @@
   <h2>Zählerstände - Mehrzweckhalle - Schützenraum - Zeitlarn</h2>
   <form id="zaehlerForm">
     <label for="strom">Stromzähler:</label>
-    <input type="number" name="strom" id="strom">
+    <div class="input-row">
+      <input type="text" name="strom" id="strom" inputmode="decimal" pattern="[0-9]+([,\.]?[0-9]*)?">
+      <span class="unit">kWh</span>
+    </div>
 
     <label for="wasser">Wasserzähler:</label>
-    <input type="number" name="wasser" id="wasser">
+    <div class="input-row">
+      <input type="text" name="wasser" id="wasser" inputmode="decimal" pattern="[0-9]+([,\.]?[0-9]*)?">
+      <span class="unit">ccm</span>
+    </div>
 
     <label for="heiz">Heizzähler:</label>
-    <input type="number" name="heiz" id="heiz">
+    <div class="input-row">
+      <input type="text" name="heiz" id="heiz" inputmode="decimal" pattern="[0-9]+([,\.]?[0-9]*)?">
+      <span class="unit">ccm</span>
+    </div>
 
     <button type="submit">Senden</button>
     <div class="status" id="statusMessage"></div>
@@ -65,9 +84,9 @@
       const status = document.getElementById("statusMessage");
       status.textContent = "Sende Daten...";
 
-      const strom = document.getElementById("strom").value;
-      const wasser = document.getElementById("wasser").value;
-      const heiz = document.getElementById("heiz").value;
+      let strom = document.getElementById("strom").value.replace(",", ".");
+      let wasser = document.getElementById("wasser").value.replace(",", ".");
+      let heiz = document.getElementById("heiz").value.replace(",", ".");
 
       if (strom === "" && wasser === "" && heiz === "") {
         status.textContent = "❗ Bitte mindestens ein Feld ausfüllen.";
@@ -84,9 +103,9 @@
       form.append("datum", datum);
       form.append("ort", "Mehrzweckhalle");
       form.append("raum", "Schützenraum-Zeitlarn");
-      if (strom !== "") form.append("strom", strom);
-      if (wasser !== "") form.append("wasser", wasser);
-      if (heiz !== "") form.append("heiz", heiz);
+      if (strom !== "") { form.append("strom", strom); form.append("einheit_strom", "kWh"); }
+      if (wasser !== "") { form.append("wasser", wasser); form.append("einheit_wasser", "ccm"); }
+      if (heiz !== "") { form.append("heiz", heiz); form.append("einheit_heiz", "ccm"); }
 
       try {
         const response = await fetch("https://script.google.com/macros/s/AKfycbxxXaexXnT-CYEBr4fFiFmaJ_J8Fnn7P_FXuwxcQIEn8GVeV1csD5vCNTzKX5D2j4rRuQ/exec", {
