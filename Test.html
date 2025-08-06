@@ -17,9 +17,21 @@
       margin: 0;
       padding: 0;
     }
+
     .custom-popup {
       font-size: 14px;
       font-family: sans-serif;
+    }
+
+    .label-badge {
+      background-color: red;
+      color: white;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 12px;
+      font-weight: bold;
+      box-shadow: 0 0 2px rgba(0, 0, 0, 0.4);
+      transform: translateY(-10px);
     }
   </style>
 </head>
@@ -44,8 +56,8 @@
 
     const userId = 'user-' + Math.random().toString(36).substring(2, 10);
 
-    // 🗺️ Karte initialisieren mit Fallback-Zentrum
-    const map = L.map('map').setView([49.03, 12.10], 13);
+    // 🗺️ Karte initialisieren
+    const map = L.map('map').setView([49.03, 12.11], 14);
     const markers = {};
     const bounds = L.latLngBounds([]);
 
@@ -53,7 +65,7 @@
       attribution: '&copy; OpenStreetMap-Mitwirkende'
     }).addTo(map);
 
-    // 📍 Punkte (Mitfahrbänke) aus der DB laden
+    // 📍 Punkte (Mitfahrbänke) aus Firebase laden
     db.ref('points').on('value', snapshot => {
       const points = snapshot.val();
 
@@ -62,26 +74,25 @@
 
         if (!markers[pointId]) {
           const marker = L.marker([lat, lng]).addTo(map);
-          markers[pointId] = { marker, popupText: '', pointId };
+          markers[pointId] = { marker, pointId };
           bounds.extend([lat, lng]);
         }
-
-        updatePopup(pointId);
       }
 
-      // Beim ersten Mal: automatisch auf alle Punkte zoomen
       if (!map._initialBoundsSet && bounds.isValid()) {
-        map.fitBounds(bounds);
+        map.fitBounds(bounds, { padding: [50, 50] });
         map._initialBoundsSet = true;
       }
     });
 
-    // 📦 Aktivierungen beobachten und Popup aktualisieren
+    // 🔴 Label-Overlays für aktive Nutzer
+    const labels = {};
+
+    // 👥 Aktive Nutzer beobachten
     db.ref('activeUsers').on('value', snapshot => {
       const allUsers = snapshot.val() || {};
       const countPerPoint = {};
 
-      // zähle Nutzer pro Punkt
       for (const uid in allUsers) {
         const { pointId, timestamp } = allUsers[uid];
         if (Date.now() - timestamp <= 3600000) {
@@ -89,7 +100,12 @@
         }
       }
 
-      // Popups aktualisieren
+      // Vorherige Labels entfernen
+      for (const pid in labels) {
+        map.removeLayer(labels[pid]);
+      }
+
+      // Popups und Labels neu setzen
       for (const pointId in markers) {
         const count = countPerPoint[pointId] || 0;
         let message = "";
@@ -111,21 +127,36 @@
         `;
 
         markers[pointId].marker.bindPopup(html);
+
+        // 🔴 Label hinzufügen wenn ≥ 1 Person wartet
+        if (count > 0) {
+          const pos = markers[pointId].marker.getLatLng();
+          const label = L.marker(pos, {
+            icon: L.divIcon({
+              className: 'count-label',
+              html: `<div class="label-badge">${count}</div>`,
+              iconSize: [24, 24],
+              iconAnchor: [-10, 24] // leicht oberhalb vom Marker
+            }),
+            interactive: false
+          }).addTo(map);
+          labels[pointId] = label;
+        }
       }
     });
 
-    // 🧑 Punkt aktivieren
+    // ✅ Eintragen
     window.selectPoint = function(pointId) {
       const timestamp = Date.now();
       db.ref(`activeUsers/${userId}`).set({ pointId, timestamp });
     };
 
-    // 🧹 Eigenen Eintrag entfernen
+    // ❌ Austragen
     function clearUser() {
       db.ref(`activeUsers/${userId}`).remove();
     }
 
-    // ⏳ Abgelaufene Einträge löschen
+    // ⏳ Automatisches Entfernen nach 1 Stunde
     setInterval(() => {
       const now = Date.now();
       db.ref('activeUsers').once('value', snapshot => {
@@ -136,14 +167,14 @@
           }
         });
       });
-    }, 60000); // alle Minute
+    }, 60000);
 
-    // ✋ Rechtsklick → Benutzer entfernen
+    // 🖱️ Rechtsklick entfernt den Nutzer
     map.on('contextmenu', () => {
       clearUser();
     });
 
-    // ⚠️ Vor Verlassen entfernen
+    // 🔄 Beim Verlassen austragen
     window.addEventListener("beforeunload", () => {
       clearUser();
     });
