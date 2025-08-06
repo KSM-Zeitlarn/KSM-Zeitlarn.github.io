@@ -33,6 +33,10 @@
       box-shadow: 0 0 2px rgba(0, 0, 0, 0.4);
       transform: translateY(-10px);
     }
+
+    button {
+      margin-top: 6px;
+    }
   </style>
 </head>
 <body>
@@ -103,7 +107,7 @@
       }
     });
 
-    // 🔴 Rote Label-Overlays (nur für andere Nutzer)
+    // 🔴 Label-Overlays
     const labels = {};
 
     db.ref('activeUsers').on('value', snapshot => {
@@ -125,12 +129,10 @@
         }
       }
 
-      // Entferne alte Label-Overlays
       for (const pid in labels) {
         map.removeLayer(labels[pid]);
       }
 
-      // Aktualisiere Marker-Icons und Popups
       for (const pointId in markers) {
         const markerData = markers[pointId];
         const marker = markerData.marker;
@@ -138,16 +140,15 @@
         const users = usersPerPoint[pointId] || [];
         const others = users.filter(uid => uid !== userId).length;
 
-        // 🟢 Marker grün für eigene Auswahl
+        // Icon setzen
         if (pointId === myPointId) {
           marker.setIcon(greenIcon);
         } else {
           marker.setIcon(defaultIcon);
         }
 
-        // 📍 Popup
+        // Popup-Inhalt
         let message = "";
-
         if (count === 0) {
           message = "An dieser Mitfahrbank befindet sich aktuell niemand.";
         } else if (count === 1) {
@@ -156,16 +157,21 @@
           message = `An dieser Mitfahrbank befinden sich ${count} Personen und würden gerne mitgenommen werden.`;
         }
 
+        const isMine = pointId === myPointId;
+
         const html = `
           <div class="custom-popup">
             ${message}<br><br>
-            <button onclick="selectPoint('${pointId}')">Ich bin hier</button>
-            <br><small>(Rechtsklick auf die Karte entfernt dich wieder)</small>
+            ${isMine
+              ? `<button onclick="clearUser()">Ich bin nicht mehr hier</button>`
+              : `<button onclick="selectPoint('${pointId}')">Ich bin hier</button>`
+            }
           </div>
         `;
+
         marker.bindPopup(html);
 
-        // 🔴 Rotes Label nur für andere Nutzer
+        // Rotes Label nur für andere
         if (others > 0) {
           const pos = marker.getLatLng();
           const label = L.marker(pos, {
@@ -182,18 +188,18 @@
       }
     });
 
-    // Eintragen
+    // Auswahl setzen
     window.selectPoint = function(pointId) {
       const timestamp = Date.now();
       db.ref(`activeUsers/${userId}`).set({ pointId, timestamp });
     };
 
-    // Austragen
-    function clearUser() {
+    // Auswahl löschen
+    window.clearUser = function () {
       db.ref(`activeUsers/${userId}`).remove();
-    }
+    };
 
-    // Automatisches Entfernen nach 1 Stunde
+    // Automatische Löschung nach 1 Stunde
     setInterval(() => {
       const now = Date.now();
       db.ref('activeUsers').once('value', snapshot => {
@@ -205,16 +211,6 @@
         });
       });
     }, 60000);
-
-    // Rechtsklick → austragen
-    map.on('contextmenu', () => {
-      clearUser();
-    });
-
-    // Beim Verlassen → austragen
-    window.addEventListener("beforeunload", () => {
-      clearUser();
-    });
   </script>
 </body>
 </html>
