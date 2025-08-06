@@ -45,25 +45,30 @@
     const userId = 'user-' + Math.random().toString(36).substring(2, 10);
 
     // 🗺️ Karte initialisieren
-    const map = L.map('map').setView([49.07, 12.1], 13);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '&copy; OpenStreetMap-Mitwirkende'
-    }).addTo(map);
-
+    const map = L.map('map');
     const markers = {};
+    const bounds = L.latLngBounds([]);
 
     // 📍 Punkte (Mitfahrbänke) aus der DB laden
     db.ref('points').on('value', snapshot => {
       const points = snapshot.val();
+
       for (const pointId in points) {
         const { lat, lng } = points[pointId];
 
         if (!markers[pointId]) {
           const marker = L.marker([lat, lng]).addTo(map);
           markers[pointId] = { marker, popupText: '', pointId };
+          bounds.extend([lat, lng]);
         }
 
         updatePopup(pointId);
+      }
+
+      // Nach dem ersten Laden: auf alle Marker zoomen
+      if (!map._initialBoundsSet) {
+        map.fitBounds(bounds);
+        map._initialBoundsSet = true;
       }
     });
 
@@ -75,7 +80,7 @@
       // zähle Nutzer pro Punkt
       for (const uid in allUsers) {
         const { pointId, timestamp } = allUsers[uid];
-        if (Date.now() - timestamp <= 3600000) { // nur wenn <1h alt
+        if (Date.now() - timestamp <= 3600000) {
           countPerPoint[pointId] = (countPerPoint[pointId] || 0) + 1;
         }
       }
