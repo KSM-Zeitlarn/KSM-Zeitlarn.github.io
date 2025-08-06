@@ -2,156 +2,130 @@
 <html lang="de">
 <head>
   <meta charset="UTF-8">
+  <title>Interaktive Karte</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Rätselzeit</title>
+  <!-- Leaflet CSS & JS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
+  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+  <!-- Firebase -->
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+
   <style>
-    * {
-      box-sizing: border-box;
-    }
-
-    body {
-      margin: 0;
-      padding: 0;
-      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      min-height: 100vh;
-      background: url('Affe.jpg') no-repeat center center fixed;
-      background-size: cover;
-      position: relative;
-    }
-
-    body::before {
-      content: "";
-      position: absolute;
-      top: 0; left: 0; right: 0; bottom: 0;
-      background: rgba(0, 0, 0, 0.4); /* Dunkler Overlay für Lesbarkeit */
-      z-index: 0;
-    }
-
-    .container {
-      position: relative;
-      background: rgba(255, 255, 255, 0.9);
-      padding: 30px 20px;
-      border-radius: 15px;
-      box-shadow: 0 8px 20px rgba(0, 0, 0, 0.2);
-      text-align: center;
-      width: 100%;
-      max-width: 400px;
-      z-index: 1;
-    }
-
-    h2 {
-      color: #333;
-      font-size: 24px;
-      margin-bottom: 10px;
-    }
-
-    p {
-      font-size: 18px;
-      margin-bottom: 20px;
-    }
-
-    input[type="text"] {
-      width: 100%;
-      padding: 12px;
-      font-size: 16px;
-      border: 2px solid #ddd;
-      border-radius: 8px;
-      outline: none;
-      transition: border 0.3s;
-    }
-
-    input[type="text"]:focus {
-      border-color: #007acc;
-    }
-
-    button {
-      margin-top: 15px;
-      padding: 12px 20px;
-      font-size: 16px;
-      background-color: #007acc;
+    body, html { height: 100%; margin: 0; }
+    #map { height: 100%; }
+    .active-user {
+      background-color: rgba(0, 150, 0, 0.5);
+      padding: 2px 4px;
+      border-radius: 4px;
       color: white;
-      border: none;
-      border-radius: 8px;
-      cursor: pointer;
-      transition: background-color 0.3s;
-      width: 100%;
-    }
-
-    button:hover {
-      background-color: #005f99;
-    }
-
-    .result {
-      margin-top: 20px;
-      font-size: 18px;
-      font-weight: bold;
-      opacity: 0;
-      transition: opacity 0.5s ease;
-    }
-
-    .result.visible {
-      opacity: 1;
-    }
-
-    .correct {
-      color: #28a745;
-    }
-
-    .incorrect {
-      color: #dc3545;
-    }
-
-    @media (max-width: 480px) {
-      h2 {
-        font-size: 20px;
-      }
-
-      p {
-        font-size: 16px;
-      }
-
-      .container {
-        padding: 25px 15px;
-      }
-
-      input[type="text"],
-      button {
-        font-size: 15px;
-      }
-
-      .result {
-        font-size: 16px;
-      }
+      font-size: 12px;
     }
   </style>
 </head>
 <body>
-  <div class="container">
-    <h2>Rätselzeit 🧠</h2>
-    <p>Wie viele Beine hat ein Hund?</p>
-
-    <input type="text" id="antwort" placeholder="Deine Antwort hier">
-    <button onclick="prüfeAntwort()">Antworten</button>
-
-    <div class="result" id="ergebnis"></div>
-  </div>
+  <div id="map"></div>
 
   <script>
-    function prüfeAntwort() {
-      const eingabe = document.getElementById("antwort").value.trim().toLowerCase();
-      const ergebnis = document.getElementById("ergebnis");
+    // 1. Firebase Konfiguration
+    const firebaseConfig = {
+      apiKey: "DEIN_API_KEY",
+      authDomain: "DEIN_PROJEKT.firebaseapp.com",
+      databaseURL: "https://DEIN_PROJEKT.firebaseio.com",
+      projectId: "DEIN_PROJEKT",
+      storageBucket: "DEIN_PROJEKT.appspot.com",
+      messagingSenderId: "DEINE_SENDER_ID",
+      appId: "DEINE_APP_ID"
+    };
 
-      if (eingabe === "4" || eingabe === "vier") {
-        ergebnis.textContent = "✅ Das war korrekt!";
-        ergebnis.className = "result visible correct";
-      } else {
-        ergebnis.textContent = "❌ Das war falsch.";
-        ergebnis.className = "result visible incorrect";
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
+
+    // 2. Zufällige User-ID erzeugen (alternativ: Login verwenden)
+    const userId = 'user-' + Math.random().toString(36).substring(2, 10);
+
+    // 3. Karte initialisieren
+    const map = L.map('map').setView([49.0, 12.1], 13);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '&copy; OpenStreetMap-Mitwirkende'
+    }).addTo(map);
+
+    // 4. Punkte aus DB laden und Marker setzen
+    const markers = {};
+    db.ref('points').on('value', snapshot => {
+      const data = snapshot.val();
+      for (const id in data) {
+        const { lat, lng } = data[id];
+        if (!markers[id]) {
+          const marker = L.marker([lat, lng]).addTo(map)
+            .bindPopup(`Punkt ${id} <br><button onclick="selectPoint('${id}')">Ich bin hier</button>`);
+          markers[id] = marker;
+        }
       }
+    });
+
+    // 5. Punkt auswählen
+    window.selectPoint = function(pointId) {
+      const timestamp = Date.now();
+      db.ref(`activeUsers/${userId}`).set({ pointId, timestamp });
+    };
+
+    // 6. Punkt wieder verlassen
+    function clearUserPosition() {
+      db.ref(`activeUsers/${userId}`).remove();
     }
+
+    // Automatisch nach 1 Stunde löschen
+    setInterval(() => {
+      const now = Date.now();
+      db.ref('activeUsers').once('value', snapshot => {
+        snapshot.forEach(child => {
+          const data = child.val();
+          if (now - data.timestamp > 60 * 60 * 1000) {
+            db.ref('activeUsers/' + child.key).remove();
+          }
+        });
+      });
+    }, 60000); // alle Minute prüfen
+
+    // 7. Anzeige aktiver Nutzer
+    const userLabels = {};
+
+    db.ref('activeUsers').on('value', snapshot => {
+      const users = snapshot.val() || {};
+      // Vorherige Labels entfernen
+      for (const label of Object.values(userLabels)) {
+        map.removeLayer(label);
+      }
+
+      for (const uid in users) {
+        const { pointId, timestamp } = users[uid];
+        if (!markers[pointId]) continue;
+        const marker = markers[pointId];
+        const pos = marker.getLatLng();
+
+        const label = L.marker(pos, {
+          icon: L.divIcon({
+            className: 'active-user',
+            html: `👤 ${uid}`,
+            iconSize: [60, 20]
+          }),
+          interactive: false
+        }).addTo(map);
+
+        userLabels[uid] = label;
+      }
+    });
+
+    // 8. Sichtbarkeit per Klick beenden
+    map.on('contextmenu', () => {
+      clearUserPosition();
+    });
+
+    // 9. Warnung bei Verlassen
+    window.addEventListener("beforeunload", () => {
+      clearUserPosition();
+    });
   </script>
 </body>
 </html>
