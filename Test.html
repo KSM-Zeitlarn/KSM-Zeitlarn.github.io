@@ -2,24 +2,24 @@
 <html lang="de">
 <head>
   <meta charset="UTF-8">
-  <title>Interaktive Karte</title>
+  <title>Mitfahrbänke Zeitlarn</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <!-- Leaflet CSS & JS -->
-  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
   <!-- Firebase -->
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
 
   <style>
-    body, html { height: 100%; margin: 0; }
-    #map { height: 100%; }
-    .active-user {
-      background-color: rgba(0, 150, 0, 0.5);
-      padding: 2px 4px;
-      border-radius: 4px;
-      color: white;
-      font-size: 12px;
+    html, body, #map {
+      height: 100%;
+      margin: 0;
+      padding: 0;
+    }
+    .custom-popup {
+      font-size: 14px;
+      font-family: sans-serif;
     }
   </style>
 </head>
@@ -27,7 +27,7 @@
   <div id="map"></div>
 
   <script>
-    // 1. Firebase Konfiguration
+    // 🔧 Firebase-Konfiguration
     const firebaseConfig = {
       apiKey: "AIzaSyDX49Jp-RlIG4p0lrzx3-58Q89p5UtOfXs",
       authDomain: "mitfahrbank-zeitlarn.firebaseapp.com",
@@ -42,41 +42,81 @@
     firebase.initializeApp(firebaseConfig);
     const db = firebase.database();
 
-    // 2. Zufällige User-ID erzeugen (alternativ: Login verwenden)
     const userId = 'user-' + Math.random().toString(36).substring(2, 10);
 
-    // 3. Karte initialisieren
-    const map = L.map('map').setView([49.0, 12.1], 13);
+    // 🗺️ Karte initialisieren
+    const map = L.map('map').setView([49.07, 12.1], 13);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       attribution: '&copy; OpenStreetMap-Mitwirkende'
     }).addTo(map);
 
-    // 4. Punkte aus DB laden und Marker setzen
     const markers = {};
+
+    // 📍 Punkte (Mitfahrbänke) aus der DB laden
     db.ref('points').on('value', snapshot => {
-      const data = snapshot.val();
-      for (const id in data) {
-        const { lat, lng } = data[id];
-        if (!markers[id]) {
-          const marker = L.marker([lat, lng]).addTo(map)
-            .bindPopup(`Punkt ${id} <br><button onclick="selectPoint('${id}')">Ich bin hier</button>`);
-          markers[id] = marker;
+      const points = snapshot.val();
+      for (const pointId in points) {
+        const { lat, lng } = points[pointId];
+
+        if (!markers[pointId]) {
+          const marker = L.marker([lat, lng]).addTo(map);
+          markers[pointId] = { marker, popupText: '', pointId };
         }
+
+        updatePopup(pointId);
       }
     });
 
-    // 5. Punkt auswählen
+    // 📦 Aktivierungen beobachten und Popup aktualisieren
+    db.ref('activeUsers').on('value', snapshot => {
+      const allUsers = snapshot.val() || {};
+      const countPerPoint = {};
+
+      // zähle Nutzer pro Punkt
+      for (const uid in allUsers) {
+        const { pointId, timestamp } = allUsers[uid];
+        if (Date.now() - timestamp <= 3600000) { // nur wenn <1h alt
+          countPerPoint[pointId] = (countPerPoint[pointId] || 0) + 1;
+        }
+      }
+
+      // Popups aktualisieren
+      for (const pointId in markers) {
+        const count = countPerPoint[pointId] || 0;
+        let message = "";
+
+        if (count === 0) {
+          message = "An dieser Mitfahrbank befindet sich aktuell niemand.";
+        } else if (count === 1) {
+          message = "An dieser Mitfahrbank befindet sich 1 Person und würde gerne mitgenommen werden.";
+        } else {
+          message = `An dieser Mitfahrbank befinden sich ${count} Personen und würden gerne mitgenommen werden.`;
+        }
+
+        const html = `
+          <div class="custom-popup">
+            ${message}<br><br>
+            <button onclick="selectPoint('${pointId}')">Ich bin hier</button>
+            <br><small>(Rechtsklick auf die Karte entfernt dich wieder)</small>
+          </div>
+        `;
+
+        markers[pointId].marker.bindPopup(html);
+      }
+    });
+
+    // 🧑 Punkt aktivieren
     window.selectPoint = function(pointId) {
       const timestamp = Date.now();
       db.ref(`activeUsers/${userId}`).set({ pointId, timestamp });
     };
 
-    // 6. Punkt wieder verlassen
-    function clearUserPosition() {
+    // 🧹 Eigenen Eintrag entfernen
+    function clearUser() {
       db.ref(`activeUsers/${userId}`).remove();
     }
 
-    // Automatisch nach 1 Stunde löschen
+    // ⏳ Abgelaufene Einträge löschen
     setInterval(() => {
       const now = Date.now();
       db.ref('activeUsers').once('value', snapshot => {
@@ -87,47 +127,17 @@
           }
         });
       });
-    }, 60000); // alle Minute prüfen
+    }, 60000); // alle Minute
 
-    // 7. Anzeige aktiver Nutzer
-    const userLabels = {};
-
-    db.ref('activeUsers').on('value', snapshot => {
-      const users = snapshot.val() || {};
-      // Vorherige Labels entfernen
-      for (const label of Object.values(userLabels)) {
-        map.removeLayer(label);
-      }
-
-      for (const uid in users) {
-        const { pointId, timestamp } = users[uid];
-        if (!markers[pointId]) continue;
-        const marker = markers[pointId];
-        const pos = marker.getLatLng();
-
-        const label = L.marker(pos, {
-          icon: L.divIcon({
-            className: 'active-user',
-            html: `👤 ${uid}`,
-            iconSize: [60, 20]
-          }),
-          interactive: false
-        }).addTo(map);
-
-        userLabels[uid] = label;
-      }
-    });
-
-    // 8. Sichtbarkeit per Klick beenden
+    // ✋ Rechtsklick → Benutzer entfernen
     map.on('contextmenu', () => {
-      clearUserPosition();
+      clearUser();
     });
 
-    // 9. Warnung bei Verlassen
+    // ⚠️ Vor Verlassen entfernen
     window.addEventListener("beforeunload", () => {
-      clearUserPosition();
+      clearUser();
     });
   </script>
 </body>
 </html>
-
