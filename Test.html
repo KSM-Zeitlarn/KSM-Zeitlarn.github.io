@@ -56,16 +56,34 @@
 
     const userId = 'user-' + Math.random().toString(36).substring(2, 10);
 
-    // 🗺️ Karte initialisieren
     const map = L.map('map').setView([49.03, 12.11], 14);
     const markers = {};
     const bounds = L.latLngBounds([]);
+
+    // 📍 Leaflet Marker Icons
+    const defaultIcon = L.icon({
+      iconUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png",
+      iconSize: [25, 41],
+      iconAnchor: [12, 41],
+      popupAnchor: [1, -34],
+      shadowUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
+      shadowSize: [41, 41]
+    });
+
+    const greenIcon = L.icon({
+      iconUrl: "https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-green.png",
+      iconSize: [25, 41],
+      iconAnchor: [12, 41],
+      popupAnchor: [1, -34],
+      shadowUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
+      shadowSize: [41, 41]
+    });
 
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       attribution: '&copy; OpenStreetMap-Mitwirkende'
     }).addTo(map);
 
-    // 📍 Punkte (Mitfahrbänke) aus Firebase laden
+    // 📍 Punkte laden
     db.ref('points').on('value', snapshot => {
       const points = snapshot.val();
 
@@ -73,7 +91,7 @@
         const { lat, lng } = points[pointId];
 
         if (!markers[pointId]) {
-          const marker = L.marker([lat, lng]).addTo(map);
+          const marker = L.marker([lat, lng], { icon: defaultIcon }).addTo(map);
           markers[pointId] = { marker, pointId };
           bounds.extend([lat, lng]);
         }
@@ -85,29 +103,49 @@
       }
     });
 
-    // 🔴 Label-Overlays für aktive Nutzer
+    // 🔴 Rote Label-Overlays (nur für andere Nutzer)
     const labels = {};
 
-    // 👥 Aktive Nutzer beobachten
     db.ref('activeUsers').on('value', snapshot => {
       const allUsers = snapshot.val() || {};
       const countPerPoint = {};
+      const usersPerPoint = {};
+      let myPointId = null;
 
       for (const uid in allUsers) {
         const { pointId, timestamp } = allUsers[uid];
         if (Date.now() - timestamp <= 3600000) {
           countPerPoint[pointId] = (countPerPoint[pointId] || 0) + 1;
+          usersPerPoint[pointId] = usersPerPoint[pointId] || [];
+          usersPerPoint[pointId].push(uid);
+
+          if (uid === userId) {
+            myPointId = pointId;
+          }
         }
       }
 
-      // Vorherige Labels entfernen
+      // Entferne alte Label-Overlays
       for (const pid in labels) {
         map.removeLayer(labels[pid]);
       }
 
-      // Popups und Labels neu setzen
+      // Aktualisiere Marker-Icons und Popups
       for (const pointId in markers) {
+        const markerData = markers[pointId];
+        const marker = markerData.marker;
         const count = countPerPoint[pointId] || 0;
+        const users = usersPerPoint[pointId] || [];
+        const others = users.filter(uid => uid !== userId).length;
+
+        // 🟢 Marker grün für eigene Auswahl
+        if (pointId === myPointId) {
+          marker.setIcon(greenIcon);
+        } else {
+          marker.setIcon(defaultIcon);
+        }
+
+        // 📍 Popup
         let message = "";
 
         if (count === 0) {
@@ -125,18 +163,17 @@
             <br><small>(Rechtsklick auf die Karte entfernt dich wieder)</small>
           </div>
         `;
+        marker.bindPopup(html);
 
-        markers[pointId].marker.bindPopup(html);
-
-        // 🔴 Label hinzufügen wenn ≥ 1 Person wartet
-        if (count > 0) {
-          const pos = markers[pointId].marker.getLatLng();
+        // 🔴 Rotes Label nur für andere Nutzer
+        if (others > 0) {
+          const pos = marker.getLatLng();
           const label = L.marker(pos, {
             icon: L.divIcon({
               className: 'count-label',
-              html: `<div class="label-badge">${count}</div>`,
+              html: `<div class="label-badge">${others}</div>`,
               iconSize: [24, 24],
-              iconAnchor: [-10, 24] // leicht oberhalb vom Marker
+              iconAnchor: [-10, 24]
             }),
             interactive: false
           }).addTo(map);
@@ -145,18 +182,18 @@
       }
     });
 
-    // ✅ Eintragen
+    // Eintragen
     window.selectPoint = function(pointId) {
       const timestamp = Date.now();
       db.ref(`activeUsers/${userId}`).set({ pointId, timestamp });
     };
 
-    // ❌ Austragen
+    // Austragen
     function clearUser() {
       db.ref(`activeUsers/${userId}`).remove();
     }
 
-    // ⏳ Automatisches Entfernen nach 1 Stunde
+    // Automatisches Entfernen nach 1 Stunde
     setInterval(() => {
       const now = Date.now();
       db.ref('activeUsers').once('value', snapshot => {
@@ -169,12 +206,12 @@
       });
     }, 60000);
 
-    // 🖱️ Rechtsklick entfernt den Nutzer
+    // Rechtsklick → austragen
     map.on('contextmenu', () => {
       clearUser();
     });
 
-    // 🔄 Beim Verlassen austragen
+    // Beim Verlassen → austragen
     window.addEventListener("beforeunload", () => {
       clearUser();
     });
