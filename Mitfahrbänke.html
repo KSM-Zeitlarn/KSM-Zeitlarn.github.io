@@ -205,7 +205,7 @@
       db.ref('activeUsers').once('value', snapshot => {
         snapshot.forEach(child => {
           const data = child.val();
-          if (now - data.timestamp > 60 * 60 * 1000) {
+          if (now - data.timestamp > 30 * 60 * 1000) {
             db.ref('activeUsers/' + child.key).remove();
           }
         });
@@ -214,3 +214,4 @@
   </script>
 </body>
 </html>
+
